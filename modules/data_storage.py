@@ -83,13 +83,13 @@ class DataStorage:
         }
         
         # Read existing data
-        df = pd.read_csv(self.csv_path)
+        df = pd.read_csv(self.csv_path, encoding='utf-8', encoding_errors='replace')
         
         # Append new row
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         
         # Save back to CSV
-        df.to_csv(self.csv_path, index=False)
+        df.to_csv(self.csv_path, index=False, encoding='utf-8')
     
     def get_session_data(self, session_id: str) -> pd.DataFrame:
         """
@@ -101,7 +101,7 @@ class DataStorage:
         Returns:
             DataFrame with session data
         """
-        df = pd.read_csv(self.csv_path)
+        df = pd.read_csv(self.csv_path, encoding='utf-8', encoding_errors='replace')
         return df[df['session_id'] == session_id]
     
     def get_question_attempts(self, session_id: str, question: str) -> pd.DataFrame:
@@ -115,7 +115,7 @@ class DataStorage:
         Returns:
             DataFrame with attempts for the question
         """
-        df = pd.read_csv(self.csv_path)
+        df = pd.read_csv(self.csv_path, encoding='utf-8', encoding_errors='replace')
         return df[(df['session_id'] == session_id) & (df['question'] == question)].sort_values('attempt_no')
     
     def get_next_attempt_number(self, session_id: str, question: str) -> int:
@@ -141,4 +141,4 @@ class DataStorage:
         Returns:
             Complete DataFrame
         """
-        return pd.read_csv(self.csv_path)
+        return pd.read_csv(self.csv_path, encoding='utf-8', encoding_errors='replace')

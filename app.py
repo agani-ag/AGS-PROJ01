@@ -294,7 +294,7 @@ with tab2:
         
         # Summary table
         st.subheader("📋 Question-wise Summary")
-        st.dataframe(analytics_df, use_container_width=True, hide_index=True)
+        st.dataframe(analytics_df, width=True, hide_index=True)
         
         st.markdown("---")
         
@@ -325,6 +325,76 @@ with tab2:
                 st.write(f"**Attempt:** {row['attempt_no']} | **Score:** {row['score']}/10 | **Time:** {row['timestamp']}")
                 st.write(f"**Answer:** {row['answer_text'][:200]}...")
                 st.markdown("---")
+    
+    # Global Analytics Section (ALL Sessions)
+    st.markdown("---")
+    st.markdown("---")
+    st.header("🌍 Global Analytics (All Sessions)")
+    st.info("📌 This section shows aggregate data from ALL sessions, not just the current one.")
+    
+    # Get all data
+    all_data = storage.get_all_data()
+    
+    if len(all_data) == 0:
+        st.warning("📭 No global data available yet.")
+    else:
+        # Calculate global analytics
+        global_analytics = analytics.calculate_global_analytics(all_data)
+        
+        # Global metrics cards
+        st.subheader("📊 Overall Statistics (All Time)")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Total Sessions", global_analytics['total_sessions'])
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Total Evaluations", global_analytics['total_evaluations'])
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Avg First Score", f"{global_analytics['avg_first_score']:.2f}/10")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Avg Last Score", f"{global_analytics['avg_last_score']:.2f}/10")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Second row of metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Total Questions", global_analytics['total_questions'])
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Avg Improvement", f"{global_analytics['avg_improvement']:.2f} pts")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Avg Learning Gain", f"{global_analytics['avg_learning_gain_pct']:.1f}%")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Avg Error Reduction", f"{global_analytics['avg_error_reduction']:.1f}")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Global average chart
+        st.subheader("📈 Global Average Score Progression")
+        st.markdown("This chart shows how average scores change across attempt numbers, using data from all sessions.")
+        fig_global = analytics.create_global_average_chart(global_analytics)
+        st.pyplot(fig_global)
 
 # Footer
 st.markdown("---")

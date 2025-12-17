@@ -197,3 +197,147 @@ class AnalyticsEngine:
         
         plt.tight_layout()
         return fig
+    
+    def calculate_global_analytics(self, all_data: pd.DataFrame) -> Dict:
+        """
+        Calculate analytics across ALL sessions (global view)
+        
+        Args:
+            all_data: DataFrame with all evaluation data from all sessions
+        
+        Returns:
+            Dictionary with global analytics
+        """
+        if len(all_data) == 0:
+            return {
+                'total_sessions': 0,
+                'total_evaluations': 0,
+                'total_questions': 0,
+                'avg_first_score': 0,
+                'avg_last_score': 0,
+                'avg_improvement': 0,
+                'avg_learning_gain_pct': 0,
+                'avg_error_reduction': 0,
+                'scores_by_attempt': {}
+            }
+        
+        analytics_list = []
+        scores_by_attempt = {}
+        
+        # Group by session and question to get first and last attempts
+        for session_id in all_data['session_id'].unique():
+            session_data = all_data[all_data['session_id'] == session_id]
+            
+            for question in session_data['question'].unique():
+                question_data = session_data[session_data['question'] == question].sort_values('attempt_no')
+                
+                if len(question_data) == 0:
+                    continue
+                
+                first_attempt = question_data.iloc[0]
+                last_attempt = question_data.iloc[-1]
+                
+                # Count missing concepts
+                first_errors = len([x for x in str(first_attempt['missing_concepts']).split(' | ') if x.strip()])
+                last_errors = len([x for x in str(last_attempt['missing_concepts']).split(' | ') if x.strip()])
+                
+                first_score = first_attempt['score']
+                last_score = last_attempt['score']
+                improvement = last_score - first_score
+                learning_gain_pct = (improvement / 10) * 100
+                error_reduction = first_errors - last_errors
+                
+                analytics_list.append({
+                    'first_score': first_score,
+                    'last_score': last_score,
+                    'improvement': improvement,
+                    'learning_gain_pct': learning_gain_pct,
+                    'error_reduction': error_reduction
+                })
+                
+                # Collect scores by attempt number
+                for _, row in question_data.iterrows():
+                    attempt_no = row['attempt_no']
+                    if attempt_no not in scores_by_attempt:
+                        scores_by_attempt[attempt_no] = []
+                    scores_by_attempt[attempt_no].append(row['score'])
+        
+        if not analytics_list:
+            return {
+                'total_sessions': len(all_data['session_id'].unique()),
+                'total_evaluations': len(all_data),
+                'total_questions': 0,
+                'avg_first_score': 0,
+                'avg_last_score': 0,
+                'avg_improvement': 0,
+                'avg_learning_gain_pct': 0,
+                'avg_error_reduction': 0,
+                'scores_by_attempt': {}
+            }
+        
+        analytics_df = pd.DataFrame(analytics_list)
+        
+        # Calculate average scores by attempt
+        avg_scores_by_attempt = {
+            attempt: sum(scores) / len(scores) 
+            for attempt, scores in scores_by_attempt.items()
+        }
+        
+        return {
+            'total_sessions': len(all_data['session_id'].unique()),
+            'total_evaluations': len(all_data),
+            'total_questions': len(analytics_list),
+            'avg_first_score': round(analytics_df['first_score'].mean(), 2),
+            'avg_last_score': round(analytics_df['last_score'].mean(), 2),
+            'avg_improvement': round(analytics_df['improvement'].mean(), 2),
+            'avg_learning_gain_pct': round(analytics_df['learning_gain_pct'].mean(), 2),
+            'avg_error_reduction': round(analytics_df['error_reduction'].mean(), 2),
+            'scores_by_attempt': avg_scores_by_attempt
+        }
+    
+    def create_global_average_chart(self, global_analytics: Dict) -> plt.Figure:
+        """
+        Create a chart showing average scores by attempt number across ALL sessions
+        
+        Args:
+            global_analytics: Dictionary with global analytics data
+        
+        Returns:
+            Matplotlib figure
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        scores_by_attempt = global_analytics.get('scores_by_attempt', {})
+        
+        if not scores_by_attempt:
+            ax.text(0.5, 0.5, 'No data available', ha='center', va='center')
+            return fig
+        
+        attempts = sorted(scores_by_attempt.keys())
+        avg_scores = [scores_by_attempt[attempt] for attempt in attempts]
+        
+        # Line chart with markers
+        ax.plot(attempts, avg_scores, marker='o', linewidth=2, markersize=10, 
+                color='#4CAF50', label='Average Score')
+        
+        # Add value labels on points
+        for attempt, score in zip(attempts, avg_scores):
+            ax.annotate(f'{score:.2f}', 
+                       xy=(attempt, score), 
+                       xytext=(0, 10),
+                       textcoords='offset points',
+                       ha='center',
+                       fontsize=10,
+                       fontweight='bold')
+        
+        ax.set_xlabel('Attempt Number', fontsize=12)
+        ax.set_ylabel('Average Score (out of 10)', fontsize=12)
+        ax.set_title('Global Average Score by Attempt (All Sessions)', fontsize=14, fontweight='bold')
+        ax.set_xticks(attempts)
+        ax.set_ylim(0, 10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend()
+        
+        plt.tight_layout()
+        return fig
+

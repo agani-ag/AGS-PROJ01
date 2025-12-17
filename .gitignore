@@ -28,9 +28,6 @@ ENV/
 # Environment variables
 .env
 
-# Data files
-data/evaluations.csv
-
 # IDE
 .vscode/
 .idea/

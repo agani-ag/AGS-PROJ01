@@ -7,6 +7,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import uuid
+import pandas as pd
 from modules import AnswerEvaluator, DataStorage, AnalyticsEngine
 
 # Load environment variables
@@ -94,7 +95,12 @@ def initialize_modules():
     except Exception as e:
         return None, None, None, str(e)
 
-evaluator, storage, analytics, error = initialize_modules()
+# Always initialize storage and analytics
+storage = DataStorage()
+analytics = AnalyticsEngine()
+
+# Try to initialize evaluator (may fail if API key not set)
+evaluator, _, _, error = initialize_modules()
 
 # Main title
 st.title("📝 Answer Feedback Bot")
@@ -126,12 +132,9 @@ with st.sidebar:
     st.markdown("### ⚙️ Settings")
     api_key_set = os.getenv('OPENAI_API_KEY') is not None
     st.write(f"**API Key:** {'✅ Set' if api_key_set else '❌ Not Set'}")
-
-# Check for errors
-if error:
-    st.error(f"⚠️ Initialization Error: {error}")
-    st.info("Please make sure your `.env` file contains a valid OPENAI_API_KEY")
-    st.stop()
+    
+    if not api_key_set:
+        st.warning("⚠️ API key not configured. Evaluation feature will be disabled.")
 
 # Create tabs for different sections
 tab1, tab2 = st.tabs(["📝 Evaluation", "📈 Analytics & Graphs"])
@@ -159,12 +162,33 @@ with tab1:
             key="answer_input"
         )
     
+    # Optional human score input
+    st.markdown("---")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**Optional: Teacher/Human Evaluation Score (0-10)**")
+        st.caption("Enter your own score to compare with AI evaluation")
+    with col2:
+        human_score = st.number_input(
+            "Human Score",
+            min_value=0.0,
+            max_value=10.0,
+            value=None,
+            step=0.5,
+            format="%.1f",
+            key="human_score_input",
+            label_visibility="collapsed"
+        )
+    
     # Evaluate button
     if st.button("🎯 Evaluate Answer", type="primary"):
         if not question.strip():
             st.warning("⚠️ Please enter a question.")
         elif not answer.strip():
             st.warning("⚠️ Please enter an answer.")
+        elif error or evaluator is None:
+            st.error("❌ Cannot evaluate: OpenAI API key is not configured.")
+            st.info("💡 Please set your OPENAI_API_KEY in the `.env` file to use the evaluation feature.")
         else:
             with st.spinner("🤔 Evaluating your answer..."):
                 # Track attempt number
@@ -178,23 +202,28 @@ with tab1:
                 try:
                     result = evaluator.evaluate_answer(question, answer)
                     
-                    # Save to storage
+                    # Save to storage (including human score if provided)
                     storage.save_evaluation(
                         session_id=st.session_state.session_id,
                         question=question,
                         attempt_no=attempt_no,
                         evaluation_result=result,
-                        answer_text=answer
+                        answer_text=answer,
+                        human_score=human_score
                     )
                     
                     # Store in session
                     st.session_state.evaluation_history.append({
                         'question': question,
                         'attempt_no': attempt_no,
-                        'result': result
+                        'result': result,
+                        'human_score': human_score
                     })
                     
-                    st.success(f"✅ Evaluation complete! (Attempt #{attempt_no})")
+                    success_msg = f"✅ Evaluation complete! (Attempt #{attempt_no})"
+                    if human_score is not None:
+                        success_msg += f" | Human Score: {human_score}/10 | AI Score: {result['score']}/10"
+                    st.success(success_msg)
                     
                 except Exception as e:
                     st.error(f"❌ Error during evaluation: {str(e)}")
@@ -294,7 +323,7 @@ with tab2:
         
         # Summary table
         st.subheader("📋 Question-wise Summary")
-        st.dataframe(analytics_df, width=True, hide_index=True)
+        st.dataframe(analytics_df, use_container_width=True, hide_index=True)
         
         st.markdown("---")
         
@@ -318,11 +347,20 @@ with tab2:
         
         st.markdown("---")
         
+        # Human vs AI Score Comparison Chart
+        st.markdown("#### 🤖 Human vs AI Score Comparison")
+        st.caption("This chart compares teacher/human scores with AI evaluation scores")
+        fig_human_ai = analytics.create_human_vs_ai_comparison_chart(session_data)
+        st.pyplot(fig_human_ai)
+        
+        st.markdown("---")
+        
         # Detailed attempt history
         with st.expander("🔍 View Detailed Attempt History"):
             for idx, row in session_data.iterrows():
                 st.markdown(f"**Question:** {row['question'][:100]}...")
-                st.write(f"**Attempt:** {row['attempt_no']} | **Score:** {row['score']}/10 | **Time:** {row['timestamp']}")
+                human_score_info = f" | **Human Score:** {row['human_score']}/10" if pd.notna(row.get('human_score')) and row.get('human_score') != '' else ""
+                st.write(f"**Attempt:** {row['attempt_no']} | **AI Score:** {row['score']}/10{human_score_info} | **Time:** {row['timestamp']}")
                 st.write(f"**Answer:** {row['answer_text'][:200]}...")
                 st.markdown("---")
     
@@ -395,6 +433,14 @@ with tab2:
         st.markdown("This chart shows how average scores change across attempt numbers, using data from all sessions.")
         fig_global = analytics.create_global_average_chart(global_analytics)
         st.pyplot(fig_global)
+        
+        st.markdown("---")
+        
+        # Global Human vs AI Comparison Chart
+        st.subheader("🤖 Global Human vs AI Score Comparison")
+        st.markdown("This chart compares average human scores with AI scores across all sessions and attempts.")
+        fig_global_human_ai = analytics.create_global_human_vs_ai_chart(all_data)
+        st.pyplot(fig_global_human_ai)
 
 # Footer
 st.markdown("---")

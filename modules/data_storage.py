@@ -39,6 +39,7 @@ class DataStorage:
                 'question',
                 'attempt_no',
                 'score',
+                'human_score',
                 'strengths',
                 'areas_for_improvement',
                 'feedback',
@@ -49,7 +50,7 @@ class DataStorage:
             df.to_csv(self.csv_path, index=False)
     
     def save_evaluation(self, session_id: str, question: str, attempt_no: int,
-                       evaluation_result: Dict, answer_text: str):
+                       evaluation_result: Dict, answer_text: str, human_score: float = None):
         """
         Save an evaluation result to CSV
         
@@ -59,6 +60,7 @@ class DataStorage:
             attempt_no: Attempt number for this question
             evaluation_result: Dictionary containing evaluation results
             answer_text: The student's answer text
+            human_score: Optional human-provided score (0-10)
         """
         # Convert lists to strings for CSV storage
         strengths_str = " | ".join(evaluation_result.get('strengths', []))
@@ -71,6 +73,7 @@ class DataStorage:
             'question': question,
             'attempt_no': attempt_no,
             'score': evaluation_result.get('score', 0),
+            'human_score': human_score if human_score is not None else '',
             'strengths': strengths_str,
             'areas_for_improvement': areas_str,
             'feedback': evaluation_result.get('feedback', ''),

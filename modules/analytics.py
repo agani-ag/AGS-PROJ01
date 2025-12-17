@@ -340,4 +340,173 @@ class AnalyticsEngine:
         
         plt.tight_layout()
         return fig
+    
+    def create_human_vs_ai_comparison_chart(self, session_data: pd.DataFrame) -> plt.Figure:
+        """
+        Create a chart comparing Human scores vs AI scores
+        
+        Args:
+            session_data: DataFrame with evaluation data including human_score
+        
+        Returns:
+            Matplotlib figure
+        """
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Filter data to only include rows with human scores
+        data_with_human = session_data[session_data['human_score'].notna() & (session_data['human_score'] != '')]
+        
+        if len(data_with_human) == 0:
+            ax.text(0.5, 0.5, 'No human evaluation data available\nAdd human scores to see comparison', 
+                   ha='center', va='center', fontsize=12)
+            return fig
+        
+        # Prepare data
+        data_with_human = data_with_human.copy()
+        data_with_human['human_score'] = pd.to_numeric(data_with_human['human_score'], errors='coerce')
+        data_with_human = data_with_human.dropna(subset=['human_score'])
+        
+        # Group by question and get the latest attempt for each
+        latest_attempts = data_with_human.sort_values('attempt_no').groupby('question').last().reset_index()
+        
+        if len(latest_attempts) == 0:
+            ax.text(0.5, 0.5, 'No valid human scores available', ha='center', va='center')
+            return fig
+        
+        # Create labels for questions
+        question_labels = [f"Q{i+1}" for i in range(len(latest_attempts))]
+        x_pos = range(len(latest_attempts))
+        width = 0.35
+        
+        # Plot bars
+        ai_bars = ax.bar([i - width/2 for i in x_pos], latest_attempts['score'], 
+                         width, label='AI Score', color='#4CAF50', alpha=0.8)
+        human_bars = ax.bar([i + width/2 for i in x_pos], latest_attempts['human_score'], 
+                           width, label='Human Score', color='#2196F3', alpha=0.8)
+        
+        # Add value labels on bars
+        for bars in [ai_bars, human_bars]:
+            for bar in bars:
+                height = bar.get_height()
+                ax.annotate(f'{height:.1f}',
+                           xy=(bar.get_x() + bar.get_width() / 2, height),
+                           xytext=(0, 3),
+                           textcoords="offset points",
+                           ha='center', va='bottom',
+                           fontsize=9)
+        
+        # Calculate and display correlation
+        correlation = latest_attempts['score'].corr(latest_attempts['human_score'])
+        ax.text(0.02, 0.98, f'Correlation: {correlation:.3f}', 
+               transform=ax.transAxes, 
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+               fontsize=10)
+        
+        ax.set_xlabel('Question', fontsize=12)
+        ax.set_ylabel('Score (out of 10)', fontsize=12)
+        ax.set_title('Human vs AI Evaluation Score Comparison', fontsize=14, fontweight='bold')
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(question_labels)
+        ax.set_ylim(0, 10.5)
+        ax.legend()
+        ax.grid(axis='y', alpha=0.3)
+        
+        plt.tight_layout()
+        return fig
+    
+    def create_global_human_vs_ai_chart(self, all_data: pd.DataFrame) -> plt.Figure:
+        """
+        Create a chart comparing Human scores vs AI scores globally (all sessions)
+        
+        Args:
+            all_data: DataFrame with all evaluation data including human_score
+        
+        Returns:
+            Matplotlib figure
+        """
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Filter data to only include rows with human scores
+        data_with_human = all_data[all_data['human_score'].notna() & (all_data['human_score'] != '')]
+        
+        if len(data_with_human) == 0:
+            ax.text(0.5, 0.5, 'No human evaluation data available\nAdd human scores to see global comparison', 
+                   ha='center', va='center', fontsize=12)
+            return fig
+        
+        # Prepare data
+        data_with_human = data_with_human.copy()
+        data_with_human['human_score'] = pd.to_numeric(data_with_human['human_score'], errors='coerce')
+        data_with_human = data_with_human.dropna(subset=['human_score'])
+        
+        if len(data_with_human) == 0:
+            ax.text(0.5, 0.5, 'No valid human scores available', ha='center', va='center')
+            return fig
+        
+        # Calculate average AI score and average Human score across all attempts
+        avg_ai_score = data_with_human['score'].mean()
+        avg_human_score = data_with_human['human_score'].mean()
+        
+        # Group by attempt number and calculate averages
+        attempt_stats = data_with_human.groupby('attempt_no').agg({
+            'score': 'mean',
+            'human_score': 'mean'
+        }).reset_index()
+        
+        attempt_stats = attempt_stats.sort_values('attempt_no')
+        
+        # Create line plot
+        attempts = attempt_stats['attempt_no']
+        ai_scores = attempt_stats['score']
+        human_scores = attempt_stats['human_score']
+        
+        ax.plot(attempts, ai_scores, marker='o', linewidth=2, markersize=10, 
+                color='#4CAF50', label='AI Average Score', linestyle='-')
+        ax.plot(attempts, human_scores, marker='s', linewidth=2, markersize=10, 
+                color='#2196F3', label='Human Average Score', linestyle='--')
+        
+        # Add value labels on points
+        for attempt, ai_score, human_score in zip(attempts, ai_scores, human_scores):
+            ax.annotate(f'{ai_score:.2f}', 
+                       xy=(attempt, ai_score), 
+                       xytext=(0, 10),
+                       textcoords='offset points',
+                       ha='center',
+                       fontsize=9,
+                       color='#4CAF50',
+                       fontweight='bold')
+            ax.annotate(f'{human_score:.2f}', 
+                       xy=(attempt, human_score), 
+                       xytext=(0, -15),
+                       textcoords='offset points',
+                       ha='center',
+                       fontsize=9,
+                       color='#2196F3',
+                       fontweight='bold')
+        
+        # Calculate and display overall statistics
+        correlation = data_with_human['score'].corr(data_with_human['human_score'])
+        mean_diff = avg_ai_score - avg_human_score
+        
+        stats_text = f'Correlation: {correlation:.3f}\n'
+        stats_text += f'Avg AI: {avg_ai_score:.2f} | Avg Human: {avg_human_score:.2f}\n'
+        stats_text += f'Difference: {mean_diff:+.2f}'
+        
+        ax.text(0.02, 0.98, stats_text, 
+               transform=ax.transAxes, 
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+               fontsize=10)
+        
+        ax.set_xlabel('Attempt Number', fontsize=12)
+        ax.set_ylabel('Average Score (out of 10)', fontsize=12)
+        ax.set_title('Global Human vs AI Score Comparison (All Sessions)', fontsize=14, fontweight='bold')
+        ax.set_xticks(attempts)
+        ax.set_ylim(0, 10.5)
+        ax.legend(loc='lower right')
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        plt.tight_layout()
+        return fig
 
